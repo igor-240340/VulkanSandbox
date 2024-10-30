@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <cstdlib>
 #include <vector>
+#include <optional>
 
 constexpr int width = 800;
 constexpr int height = 600;
@@ -19,6 +20,14 @@ const bool enable_validation_layers = false;
 const bool enable_validation_layers = true;
 #endif
 
+struct QueueFamilyIndices {
+    std::optional<uint32_t> graphics_family;
+
+    bool is_complete() {
+        return graphics_family.has_value();
+    }
+};
+
 class TriangleApplication {
 public:
     void run() {
@@ -32,6 +41,7 @@ private:
     GLFWwindow* window;
 
     VkInstance instance;
+    VkPhysicalDevice physical_device = VK_NULL_HANDLE;
 
     void init_window() {
         glfwInit();
@@ -47,7 +57,7 @@ private:
 
     void create_instance() {
         if (enable_validation_layers && !check_validation_layer_support()) {
-            throw std::runtime_error("vk:validation layers requested, but not available");
+            throw std::runtime_error("vk::validation layers requested, but not available");
         }
 
         VkApplicationInfo app_info{};
@@ -80,7 +90,7 @@ private:
         }
 
         if (vkCreateInstance(&create_info, nullptr, &instance) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to create instance");
+            throw std::runtime_error("vk::failed to create instance");
         }
     }
 
@@ -93,7 +103,7 @@ private:
     }
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data) {
-        std::cerr << "vk:validation layer: " << callback_data->pMessage << std::endl;
+        std::cerr << "vk::validation layer: " << callback_data->pMessage << std::endl;
         return VK_FALSE;
     }
 
@@ -134,6 +144,59 @@ private:
         }
 
         return extensions;
+    }
+
+    void pick_physical_device() {
+        uint32_t device_count = 0;
+        vkEnumeratePhysicalDevices(instance, &device_count, nullptr);
+
+        if (device_count == 0) {
+            throw std::runtime_error("vk::failed to find GPUs with Vulkan support");
+        }
+
+        std::vector<VkPhysicalDevice> devices(device_count);
+        vkEnumeratePhysicalDevices(instance, &device_count, devices.data());
+
+        for (const auto& device : devices) {
+            if (is_device_suitable(device)) {
+                physical_device = device;
+                break;
+            }
+        }
+
+        if (physical_device == VK_NULL_HANDLE) {
+            throw std::runtime_error("vk::failed to find a suitable GPU");
+        }
+    }
+
+    bool is_device_suitable(VkPhysicalDevice device) {
+        QueueFamilyIndices indices = find_queue_families(device);
+        return indices.is_complete();
+    }
+
+    QueueFamilyIndices find_queue_families(VkPhysicalDevice device) {
+        QueueFamilyIndices indices;
+
+        uint32_t queue_family_count = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
+
+        std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families.data());
+
+        int i = 0;
+        for (const auto& queue_family : queue_families) {
+            if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                indices.graphics_family = i;
+            }
+
+            if (indices.is_complete()) {
+                break;
+            }
+
+            i++;
+        }
+
+        return indices;
     }
 
     void main_loop() {
