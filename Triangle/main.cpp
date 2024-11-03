@@ -11,6 +11,10 @@
 constexpr int width = 800;
 constexpr int height = 600;
 
+const std::vector<const char*> device_extensions = {
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME
+};
+
 const std::vector<const char*> validation_layers = {
     "VK_LAYER_KHRONOS_validation"
 };
@@ -28,6 +32,12 @@ struct QueueFamilyIndices {
     bool is_complete() {
         return graphics_family.has_value() && present_family.has_value();
     }
+};
+
+struct SwapChainSupportDetails {
+    VkSurfaceCapabilitiesKHR capabilities;
+    std::vector<VkSurfaceFormatKHR> formats;
+    std::vector<VkPresentModeKHR> present_modes;
 };
 
 class TriangleApplication {
@@ -187,7 +197,32 @@ private:
 
     bool is_device_suitable(VkPhysicalDevice device) {
         QueueFamilyIndices indices = find_queue_families(device);
-        return indices.is_complete();
+
+        bool extensions_supported = check_device_extension_support(device);
+
+        bool swap_chain_adequate = false;
+        if (extensions_supported) {
+            SwapChainSupportDetails swap_chain_support = query_swap_chain_support(device);
+            swap_chain_adequate = !swap_chain_support.formats.empty() && !swap_chain_support.present_modes.empty();
+        }
+
+        return indices.is_complete() && extensions_supported && swap_chain_adequate;
+    }
+
+    bool check_device_extension_support(VkPhysicalDevice device) {
+        uint32_t extension_count;
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, nullptr);
+
+        std::vector<VkExtensionProperties> available_extensions(extension_count);
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, available_extensions.data());
+
+        std::set<std::string> required_extensions(device_extensions.begin(), device_extensions.end());
+
+        for (const auto& extension : available_extensions) {
+            required_extensions.erase(extension.extensionName);
+        }
+
+        return required_extensions.empty();
     }
 
     QueueFamilyIndices find_queue_families(VkPhysicalDevice device) {
@@ -251,7 +286,8 @@ private:
 
         create_info.pEnabledFeatures = &device_features;
 
-        create_info.enabledExtensionCount = 0;
+        create_info.enabledExtensionCount = static_cast<uint32_t>(device_extensions.size());
+        create_info.ppEnabledExtensionNames = device_extensions.data();
 
         if (enable_validation_layers) {
             create_info.enabledLayerCount = static_cast<uint32_t>(validation_layers.size());
@@ -267,6 +303,30 @@ private:
 
         vkGetDeviceQueue(logical_device, indices.graphics_family.value(), 0, &graphics_queue);
         vkGetDeviceQueue(logical_device, indices.present_family.value(), 0, &present_queue);
+    }
+
+    SwapChainSupportDetails query_swap_chain_support(VkPhysicalDevice device) {
+        SwapChainSupportDetails details;
+
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
+
+        uint32_t format_count;
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, nullptr);
+
+        if (format_count != 0) {
+            details.formats.resize(format_count);
+            vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, details.formats.data());
+        }
+
+        uint32_t present_mode_count;
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, nullptr);
+
+        if (present_mode_count != 0) {
+            details.present_modes.resize(present_mode_count);
+            vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, details.present_modes.data());
+        }
+
+        return details;
     }
 
     void main_loop() {
