@@ -82,6 +82,7 @@ private:
         create_logical_device();
         create_swap_chain();
         create_image_views();
+        create_graphics_pipeline();
     }
 
     void create_instance() {
@@ -230,6 +231,9 @@ private:
                 throw std::runtime_error("vk::failed to create image views!");
             }
         }
+    }
+
+    void create_graphics_pipeline() {
     }
 
     void create_surface() {
