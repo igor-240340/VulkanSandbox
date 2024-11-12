@@ -108,6 +108,9 @@ private:
     VkRenderPass render_pass;
     VkPipelineLayout pipeline_layout;
     VkPipeline graphics_pipeline;
+    std::vector<VkFramebuffer> swap_chain_framebuffers;
+    VkCommandPool command_pool;
+    VkCommandBuffer command_buffer;
 
     void init_window() {
         glfwInit();
@@ -127,6 +130,9 @@ private:
         create_image_views();
         create_render_pass();
         create_graphics_pipeline();
+        create_framebuffers();
+        create_command_pool();
+        create_command_buffer();
     }
 
     void create_instance() {
@@ -375,58 +381,58 @@ private:
         color_blending.blendConstants[2] = 0.0f;
         color_blending.blendConstants[3] = 0.0f;
 
-/*
-        VkPipelineVertexInputStateCreateInfo vertex_input_info{};
-        vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        /*
+                VkPipelineVertexInputStateCreateInfo vertex_input_info{};
+                vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
-        auto binding_description = Vertex::get_binding_description();
-        auto attribute_descriptions = Vertex::get_attribute_descriptions();
+                auto binding_description = Vertex::get_binding_description();
+                auto attribute_descriptions = Vertex::get_attribute_descriptions();
 
-        vertex_input_info.vertexBindingDescriptionCount = 1;
-        vertex_input_info.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_descriptions.size());
-        vertex_input_info.pVertexBindingDescriptions = &binding_description;
-        vertex_input_info.pVertexAttributeDescriptions = attribute_descriptions.data();
+                vertex_input_info.vertexBindingDescriptionCount = 1;
+                vertex_input_info.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_descriptions.size());
+                vertex_input_info.pVertexBindingDescriptions = &binding_description;
+                vertex_input_info.pVertexAttributeDescriptions = attribute_descriptions.data();
 
-        VkPipelineInputAssemblyStateCreateInfo input_assembly{};
-        input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        input_assembly.primitiveRestartEnable = VK_FALSE;
+                VkPipelineInputAssemblyStateCreateInfo input_assembly{};
+                input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+                input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+                input_assembly.primitiveRestartEnable = VK_FALSE;
 
-        VkPipelineViewportStateCreateInfo viewport_state{};
-        viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        viewport_state.viewportCount = 1;
-        viewport_state.scissorCount = 1;
+                VkPipelineViewportStateCreateInfo viewport_state{};
+                viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+                viewport_state.viewportCount = 1;
+                viewport_state.scissorCount = 1;
 
-        VkPipelineRasterizationStateCreateInfo rasterizer{};
-        rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        rasterizer.depthClampEnable = VK_FALSE;
-        rasterizer.rasterizerDiscardEnable = VK_FALSE;
-        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-        rasterizer.lineWidth = 1.0f;
-        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-        rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
-        rasterizer.depthBiasEnable = VK_FALSE;
+                VkPipelineRasterizationStateCreateInfo rasterizer{};
+                rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+                rasterizer.depthClampEnable = VK_FALSE;
+                rasterizer.rasterizerDiscardEnable = VK_FALSE;
+                rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+                rasterizer.lineWidth = 1.0f;
+                rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+                rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+                rasterizer.depthBiasEnable = VK_FALSE;
 
-        VkPipelineMultisampleStateCreateInfo multisampling{};
-        multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        multisampling.sampleShadingEnable = VK_FALSE;
-        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+                VkPipelineMultisampleStateCreateInfo multisampling{};
+                multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+                multisampling.sampleShadingEnable = VK_FALSE;
+                multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-        VkPipelineColorBlendAttachmentState color_blend_attachment{};
-        color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-        color_blend_attachment.blendEnable = VK_FALSE;
+                VkPipelineColorBlendAttachmentState color_blend_attachment{};
+                color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+                color_blend_attachment.blendEnable = VK_FALSE;
 
-        VkPipelineColorBlendStateCreateInfo color_blending{};
-        color_blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        color_blending.logicOpEnable = VK_FALSE;
-        color_blending.logicOp = VK_LOGIC_OP_COPY;
-        color_blending.attachmentCount = 1;
-        color_blending.pAttachments = &color_blend_attachment;
-        color_blending.blendConstants[0] = 0.0f;
-        color_blending.blendConstants[1] = 0.0f;
-        color_blending.blendConstants[2] = 0.0f;
-        color_blending.blendConstants[3] = 0.0f;
-*/
+                VkPipelineColorBlendStateCreateInfo color_blending{};
+                color_blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+                color_blending.logicOpEnable = VK_FALSE;
+                color_blending.logicOp = VK_LOGIC_OP_COPY;
+                color_blending.attachmentCount = 1;
+                color_blending.pAttachments = &color_blend_attachment;
+                color_blending.blendConstants[0] = 0.0f;
+                color_blending.blendConstants[1] = 0.0f;
+                color_blending.blendConstants[2] = 0.0f;
+                color_blending.blendConstants[3] = 0.0f;
+        */
 
         std::vector<VkDynamicState> dynamic_states = {
             VK_DYNAMIC_STATE_VIEWPORT,
@@ -468,6 +474,100 @@ private:
 
         vkDestroyShaderModule(logical_device, frag_shader_module, nullptr);
         vkDestroyShaderModule(logical_device, vert_shader_module, nullptr);
+    }
+
+    void create_framebuffers() {
+        swap_chain_framebuffers.resize(swap_chain_image_views.size());
+
+        for (size_t i = 0; i < swap_chain_image_views.size(); i++) {
+            VkImageView attachments[] = {
+                swap_chain_image_views[i]
+            };
+
+            VkFramebufferCreateInfo framebuffer_info{};
+            framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            framebuffer_info.renderPass = render_pass;
+            framebuffer_info.attachmentCount = 1;
+            framebuffer_info.pAttachments = attachments;
+            framebuffer_info.width = swap_chain_extent.width;
+            framebuffer_info.height = swap_chain_extent.height;
+            framebuffer_info.layers = 1;
+
+            if (vkCreateFramebuffer(logical_device, &framebuffer_info, nullptr, &swap_chain_framebuffers[i]) != VK_SUCCESS) {
+                throw std::runtime_error("vk::failed to create framebuffer!");
+            }
+        }
+    }
+
+    void create_command_buffer() {
+        VkCommandBufferAllocateInfo alloc_info{};
+        alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        alloc_info.commandPool = command_pool;
+        alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        alloc_info.commandBufferCount = 1;
+
+        if (vkAllocateCommandBuffers(logical_device, &alloc_info, &command_buffer) != VK_SUCCESS) {
+            throw std::runtime_error("vk::failed to allocate command buffers");
+        }
+    }
+
+    void record_command_buffer(VkCommandBuffer command_buffer, uint32_t image_index) {
+        VkCommandBufferBeginInfo begin_info{};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+        if (vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
+            throw std::runtime_error("vk::failed to begin recording command buffer!");
+        }
+
+        VkRenderPassBeginInfo render_pass_info{};
+        render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        render_pass_info.renderPass = render_pass;
+        render_pass_info.framebuffer = swap_chain_framebuffers[image_index];
+        render_pass_info.renderArea.offset = { 0, 0 };
+        render_pass_info.renderArea.extent = swap_chain_extent;
+
+        VkClearValue clear_color = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+        render_pass_info.clearValueCount = 1;
+        render_pass_info.pClearValues = &clear_color;
+
+        vkCmdBeginRenderPass(command_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
+
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = (float)swap_chain_extent.width;
+        viewport.height = (float)swap_chain_extent.height;
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+
+        VkRect2D scissor{};
+        scissor.offset = { 0, 0 };
+        scissor.extent = swap_chain_extent;
+        vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+
+        vkCmdDraw(command_buffer, 3, 1, 0, 0);
+
+        vkCmdEndRenderPass(command_buffer);
+
+        if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
+            throw std::runtime_error("vk::failed to record command buffer");
+        }
+    }
+
+    void create_command_pool() {
+        QueueFamilyIndices queue_family_indices = find_queue_families(physical_device);
+
+        VkCommandPoolCreateInfo pool_info{};
+        pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        pool_info.queueFamilyIndex = queue_family_indices.graphics_family.value();
+
+        if (vkCreateCommandPool(logical_device, &pool_info, nullptr, &command_pool) != VK_SUCCESS) {
+            throw std::runtime_error("vk::failed to create command pool!");
+        }
     }
 
     VkShaderModule create_shader_module(const std::vector<char>& code) {
@@ -716,6 +816,10 @@ private:
     }
 
     void cleanup() {
+        vkDestroyCommandPool(logical_device, command_pool, nullptr);
+        for (auto framebuffer : swap_chain_framebuffers) {
+            vkDestroyFramebuffer(logical_device, framebuffer, nullptr);
+        }
         vkDestroyPipeline(logical_device, graphics_pipeline, nullptr);
         vkDestroyPipelineLayout(logical_device, pipeline_layout, nullptr);
         vkDestroyRenderPass(logical_device, render_pass, nullptr);
