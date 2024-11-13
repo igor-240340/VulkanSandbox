@@ -526,30 +526,28 @@ private:
         render_pass_info.renderArea.offset = { 0, 0 };
         render_pass_info.renderArea.extent = swap_chain_extent;
 
-        VkClearValue clear_color = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+        VkClearValue clear_color = { {{1.0f, 1.0f, 1.0f, 1.0f}} };
         render_pass_info.clearValueCount = 1;
         render_pass_info.pClearValues = &clear_color;
 
         vkCmdBeginRenderPass(command_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+            vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
 
-        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
+            VkViewport viewport{};
+            viewport.x = 0.0f;
+            viewport.y = 0.0f;
+            viewport.width = (float)swap_chain_extent.width;
+            viewport.height = (float)swap_chain_extent.height;
+            viewport.minDepth = 0.0f;
+            viewport.maxDepth = 1.0f;
+            vkCmdSetViewport(command_buffer, 0, 1, &viewport);
 
-        VkViewport viewport{};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = (float)swap_chain_extent.width;
-        viewport.height = (float)swap_chain_extent.height;
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+            VkRect2D scissor{};
+            scissor.offset = { 0, 0 };
+            scissor.extent = swap_chain_extent;
+            vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-        VkRect2D scissor{};
-        scissor.offset = { 0, 0 };
-        scissor.extent = swap_chain_extent;
-        vkCmdSetScissor(command_buffer, 0, 1, &scissor);
-
-        vkCmdDraw(command_buffer, 3, 1, 0, 0);
-
+            vkCmdDraw(command_buffer, 3, 1, 0, 0);
         vkCmdEndRenderPass(command_buffer);
 
         if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
@@ -812,7 +810,11 @@ private:
     void main_loop() {
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
+            draw_frame();
         }
+    }
+
+    void draw_frame() {
     }
 
     void cleanup() {
