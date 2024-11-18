@@ -897,7 +897,6 @@ private:
 
     void draw_frame() {
         vkWaitForFences(logical_device, 1, &in_flight_fences[current_frame], VK_TRUE, UINT64_MAX);
-        vkResetFences(logical_device, 1, &in_flight_fences[current_frame]);
 
         uint32_t image_index;
         VkResult result = vkAcquireNextImageKHR(logical_device, swap_chain, UINT64_MAX, image_available_semaphores[current_frame], VK_NULL_HANDLE, &image_index);
@@ -908,6 +907,8 @@ private:
         else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
             throw std::runtime_error("vk:failed to acquire swap chain image");
         }
+
+        vkResetFences(logical_device, 1, &in_flight_fences[current_frame]);
 
         vkResetCommandBuffer(command_buffers[current_frame], 0);
         record_command_buffer(command_buffers[current_frame], image_index);
