@@ -116,6 +116,9 @@ private:
     VkCommandPool command_pool;
     std::vector<VkCommandBuffer> command_buffers;
 
+    VkBuffer vertex_buffer;
+    VkDeviceMemory vertex_buffer_memory;
+
     std::vector<VkSemaphore> image_available_semaphores;
     std::vector<VkSemaphore> render_finished_semaphores;
     std::vector<VkFence> in_flight_fences;
@@ -148,13 +151,14 @@ private:
         create_graphics_pipeline();
         create_framebuffers();
         create_command_pool();
+        create_vertex_buffer();
         create_command_buffers();
         create_sync_objects();
     }
 
     void create_instance() {
         if (enable_validation_layers && !check_validation_layer_support()) {
-            throw std::runtime_error("vk:validation layers requested, but not available");
+            throw std::runtime_error("vk: validation layers requested, but not available");
         }
 
         VkApplicationInfo app_info{};
@@ -187,7 +191,7 @@ private:
         }
 
         if (vkCreateInstance(&create_info, nullptr, &instance) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to create instance");
+            throw std::runtime_error("vk: failed to create instance");
         }
     }
 
@@ -264,7 +268,7 @@ private:
         create_info.oldSwapchain = VK_NULL_HANDLE;
 
         if (vkCreateSwapchainKHR(logical_device, &create_info, nullptr, &swap_chain) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to create swap chain");
+            throw std::runtime_error("vk: failed to create swap chain");
         }
 
         vkGetSwapchainImagesKHR(logical_device, swap_chain, &image_count, nullptr);
@@ -295,7 +299,7 @@ private:
             create_info.subresourceRange.layerCount = 1;
 
             if (vkCreateImageView(logical_device, &create_info, nullptr, &swap_chain_image_views[i]) != VK_SUCCESS) {
-                throw std::runtime_error("vk:failed to create image views");
+                throw std::runtime_error("vk: failed to create image views");
             }
         }
     }
@@ -338,7 +342,7 @@ private:
         render_pass_info.pDependencies = &dependency;
 
         if (vkCreateRenderPass(logical_device, &render_pass_info, nullptr, &render_pass) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to create render pass");
+            throw std::runtime_error("vk: failed to create render pass");
         }
     }
 
@@ -429,7 +433,7 @@ private:
         pipeline_layout_info.pushConstantRangeCount = 0;
 
         if (vkCreatePipelineLayout(logical_device, &pipeline_layout_info, nullptr, &pipeline_layout) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to create pipeline layout");
+            throw std::runtime_error("vk: failed to create pipeline layout");
         }
 
         VkGraphicsPipelineCreateInfo pipeline_info{};
@@ -449,7 +453,7 @@ private:
         pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
 
         if (vkCreateGraphicsPipelines(logical_device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &graphics_pipeline) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to create graphics pipeline");
+            throw std::runtime_error("vk: failed to create graphics pipeline");
         }
 
         vkDestroyShaderModule(logical_device, frag_shader_module, nullptr);
@@ -474,7 +478,7 @@ private:
             framebuffer_info.layers = 1;
 
             if (vkCreateFramebuffer(logical_device, &framebuffer_info, nullptr, &swap_chain_framebuffers[i]) != VK_SUCCESS) {
-                throw std::runtime_error("vk:failed to create framebuffer");
+                throw std::runtime_error("vk: failed to create framebuffer");
             }
         }
     }
@@ -508,6 +512,50 @@ private:
         vkDestroySwapchainKHR(logical_device, swap_chain, nullptr);
     }
 
+    void create_vertex_buffer() {
+        VkBufferCreateInfo buffer_info{};
+        buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buffer_info.size = sizeof(vertices[0]) * vertices.size();
+        buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        if (vkCreateBuffer(logical_device, &buffer_info, nullptr, &vertex_buffer) != VK_SUCCESS) {
+            throw std::runtime_error("vk: failed to create vertex buffer");
+        }
+
+        VkMemoryRequirements mem_requirements;
+        vkGetBufferMemoryRequirements(logical_device, vertex_buffer, &mem_requirements);
+
+        VkMemoryAllocateInfo alloc_info{};
+        alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        alloc_info.allocationSize = mem_requirements.size;
+        alloc_info.memoryTypeIndex = find_memory_type(mem_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        if (vkAllocateMemory(logical_device, &alloc_info, nullptr, &vertex_buffer_memory) != VK_SUCCESS) {
+            throw std::runtime_error("vk: failed to allocate vertex buffer memory");
+        }
+
+        vkBindBufferMemory(logical_device, vertex_buffer, vertex_buffer_memory, 0);
+
+        void* data;
+        vkMapMemory(logical_device, vertex_buffer_memory, 0, buffer_info.size, 0, &data);
+        memcpy(data, vertices.data(), (size_t)buffer_info.size);
+        vkUnmapMemory(logical_device, vertex_buffer_memory);
+    }
+
+    uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties) {
+        VkPhysicalDeviceMemoryProperties mem_properties;
+        vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_properties);
+
+        for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++) {
+            if ((type_filter & (1 << i)) && (mem_properties.memoryTypes[i].propertyFlags & properties) == properties) {
+                return i;
+            }
+        }
+
+        throw std::runtime_error("vk: failed to find suitable memory type");
+    }
+
     void create_command_buffers() {
         command_buffers.resize(MAX_FRAMES_IN_FLIGHT);
 
@@ -518,7 +566,7 @@ private:
         alloc_info.commandBufferCount = (uint32_t)command_buffers.size();
 
         if (vkAllocateCommandBuffers(logical_device, &alloc_info, command_buffers.data()) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to allocate command buffers");
+            throw std::runtime_error("vk: failed to allocate command buffers");
         }
     }
 
@@ -538,7 +586,7 @@ private:
             if (vkCreateSemaphore(logical_device, &semaphore_info, nullptr, &image_available_semaphores[i]) != VK_SUCCESS ||
                 vkCreateSemaphore(logical_device, &semaphore_info, nullptr, &render_finished_semaphores[i]) != VK_SUCCESS ||
                 vkCreateFence(logical_device, &fence_info, nullptr, &in_flight_fences[i]) != VK_SUCCESS) {
-                throw std::runtime_error("vk:failed to create synchronization objects for a frame");
+                throw std::runtime_error("vk: failed to create synchronization objects for a frame");
             }
         }
     }
@@ -548,7 +596,7 @@ private:
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
         if (vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to begin recording command buffer");
+            throw std::runtime_error("vk: failed to begin recording command buffer");
         }
 
         VkRenderPassBeginInfo render_pass_info{};
@@ -579,11 +627,15 @@ private:
         scissor.extent = swap_chain_extent;
         vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-        vkCmdDraw(command_buffer, 3, 1, 0, 0);
+        VkBuffer vertex_buffers[] = { vertex_buffer };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, offsets);
+
+        vkCmdDraw(command_buffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
         vkCmdEndRenderPass(command_buffer);
 
         if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to record command buffer");
+            throw std::runtime_error("vk: failed to record command buffer");
         }
     }
 
@@ -596,7 +648,7 @@ private:
         pool_info.queueFamilyIndex = queue_family_indices.graphics_family.value();
 
         if (vkCreateCommandPool(logical_device, &pool_info, nullptr, &command_pool) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to create command pool");
+            throw std::runtime_error("vk: failed to create command pool");
         }
     }
 
@@ -608,7 +660,7 @@ private:
 
         VkShaderModule shader_module;
         if (vkCreateShaderModule(logical_device, &create_info, nullptr, &shader_module) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to create shader module");
+            throw std::runtime_error("vk: failed to create shader module");
         }
 
         return shader_module;
@@ -616,7 +668,7 @@ private:
 
     void create_surface() {
         if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to create window surface");
+            throw std::runtime_error("vk: failed to create window surface");
         }
     }
 
@@ -629,7 +681,7 @@ private:
     }
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data) {
-        std::cerr << "vk:validation layer " << callback_data->pMessage << std::endl;
+        std::cerr << "vk: validation layer " << callback_data->pMessage << std::endl;
         return VK_FALSE;
     }
 
@@ -677,7 +729,7 @@ private:
         vkEnumeratePhysicalDevices(instance, &device_count, nullptr);
 
         if (device_count == 0) {
-            throw std::runtime_error("vk:failed to find GPUs with Vulkan support");
+            throw std::runtime_error("vk: failed to find GPUs with Vulkan support");
         }
 
         std::vector<VkPhysicalDevice> devices(device_count);
@@ -691,7 +743,7 @@ private:
         }
 
         if (physical_device == VK_NULL_HANDLE) {
-            throw std::runtime_error("vk:failed to find a suitable GPU");
+            throw std::runtime_error("vk: failed to find a suitable GPU");
         }
     }
 
@@ -808,7 +860,7 @@ private:
         }
 
         if (vkCreateDevice(physical_device, &create_info, nullptr, &logical_device) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to create logical device");
+            throw std::runtime_error("vk: failed to create logical device");
         }
 
         vkGetDeviceQueue(logical_device, indices.graphics_family.value(), 0, &graphics_queue);
@@ -858,7 +910,7 @@ private:
             return;
         }
         else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-            throw std::runtime_error("vk:failed to acquire swap chain image");
+            throw std::runtime_error("vk: failed to acquire swap chain image");
         }
 
         vkResetFences(logical_device, 1, &in_flight_fences[current_frame]);
@@ -883,7 +935,7 @@ private:
         submit_info.pSignalSemaphores = signal_semaphores;
 
         if (vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fences[current_frame]) != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to submit draw command buffer");
+            throw std::runtime_error("vk: failed to submit draw command buffer");
         }
 
         VkPresentInfoKHR present_info{};
@@ -903,7 +955,7 @@ private:
             recreate_swap_chain();
         }
         else if (result != VK_SUCCESS) {
-            throw std::runtime_error("vk:failed to present swap chain image");
+            throw std::runtime_error("vk: failed to present swap chain image");
         }
 
         current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -911,14 +963,20 @@ private:
 
     void cleanup() {
         cleanup_swap_chain();
+
         vkDestroyPipeline(logical_device, graphics_pipeline, nullptr);
         vkDestroyPipelineLayout(logical_device, pipeline_layout, nullptr);
         vkDestroyRenderPass(logical_device, render_pass, nullptr);
+
+        vkDestroyBuffer(logical_device, vertex_buffer, nullptr);
+        vkFreeMemory(logical_device, vertex_buffer_memory, nullptr);
+
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vkDestroySemaphore(logical_device, render_finished_semaphores[i], nullptr);
             vkDestroySemaphore(logical_device, image_available_semaphores[i], nullptr);
             vkDestroyFence(logical_device, in_flight_fences[i], nullptr);
         }
+
         vkDestroyCommandPool(logical_device, command_pool, nullptr);
         vkDestroyDevice(logical_device, nullptr);
         vkDestroySurfaceKHR(instance, surface, nullptr);
