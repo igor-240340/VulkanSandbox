@@ -2,6 +2,7 @@
 #include <GLFW/glfw3.h>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <iostream>
 #include <fstream>
@@ -13,6 +14,7 @@
 #include <limits>
 #include <algorithm>
 #include <array>
+#include <chrono>
 
 constexpr int width = 800;
 constexpr int height = 600;
@@ -91,6 +93,12 @@ const std::vector<uint16_t> indices = {
 
 uint32_t current_frame = 0;
 
+struct UniformBufferObject {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
+};
+
 class TriangleApplication {
 public:
     void run() {
@@ -114,6 +122,7 @@ private:
     VkFormat swap_chain_image_format;
     VkExtent2D swap_chain_extent;
     std::vector<VkImageView> swap_chain_image_views;
+    VkDescriptorSetLayout descriptor_set_layout;
     VkRenderPass render_pass;
     VkPipelineLayout pipeline_layout;
     VkPipeline graphics_pipeline;
@@ -125,6 +134,10 @@ private:
     VkDeviceMemory vertex_buffer_memory;
     VkBuffer index_buffer;
     VkDeviceMemory index_buffer_memory;
+
+    std::vector<VkBuffer> uniformBuffers;
+    std::vector<VkDeviceMemory> uniformBuffersMemory;
+    std::vector<void*> uniform_buffers_mapped;
 
     std::vector<VkSemaphore> image_available_semaphores;
     std::vector<VkSemaphore> render_finished_semaphores;
@@ -155,11 +168,13 @@ private:
         create_swap_chain();
         create_image_views();
         create_render_pass();
+        create_descriptor_set_layout();
         create_graphics_pipeline();
         create_framebuffers();
         create_command_pool();
         create_vertex_buffer();
         create_index_buffer();
+        createUniformBuffers();
         create_command_buffers();
         create_sync_objects();
     }
@@ -354,6 +369,24 @@ private:
         }
     }
 
+    void create_descriptor_set_layout() {
+        VkDescriptorSetLayoutBinding ubo_layout_binding{};
+        ubo_layout_binding.binding = 0;
+        ubo_layout_binding.descriptorCount = 1;
+        ubo_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        ubo_layout_binding.pImmutableSamplers = nullptr;
+        ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+        VkDescriptorSetLayoutCreateInfo layout_info{};
+        layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layout_info.bindingCount = 1;
+        layout_info.pBindings = &ubo_layout_binding;
+
+        if (vkCreateDescriptorSetLayout(logical_device, &layout_info, nullptr, &descriptor_set_layout) != VK_SUCCESS) {
+            throw std::runtime_error("vk: failed to create descriptor set layout");
+        }
+    }
+
     void create_graphics_pipeline() {
         std::vector<char> vert_shader_code = read_file("shaders/vert.spv");
         std::vector<char> frag_shader_code = read_file("shaders/frag.spv");
@@ -437,9 +470,9 @@ private:
 
         VkPipelineLayoutCreateInfo pipeline_layout_info{};
         pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipeline_layout_info.setLayoutCount = 0;
-        pipeline_layout_info.pushConstantRangeCount = 0;
-
+        pipeline_layout_info.setLayoutCount = 1;
+        pipeline_layout_info.pSetLayouts = &descriptor_set_layout;
+        
         if (vkCreatePipelineLayout(logical_device, &pipeline_layout_info, nullptr, &pipeline_layout) != VK_SUCCESS) {
             throw std::runtime_error("vk: failed to create pipeline layout");
         }
@@ -558,6 +591,20 @@ private:
 
         vkDestroyBuffer(logical_device, staging_buffer, nullptr);
         vkFreeMemory(logical_device, staging_buffer_memory, nullptr);
+    }
+
+    void createUniformBuffers() {
+        VkDeviceSize buffer_size = sizeof(UniformBufferObject);
+
+        uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+        uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+        uniform_buffers_mapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            create_buffer(buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
+
+            vkMapMemory(logical_device, uniformBuffersMemory[i], 0, buffer_size, 0, &uniform_buffers_mapped[i]);
+        }
     }
 
     void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& buffer_memory) {
@@ -685,29 +732,29 @@ private:
         render_pass_info.pClearValues = &clear_color;
 
         vkCmdBeginRenderPass(command_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
-            vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
 
-            VkViewport viewport{};
-            viewport.x = 0.0f;
-            viewport.y = 0.0f;
-            viewport.width = (float)swap_chain_extent.width;
-            viewport.height = (float)swap_chain_extent.height;
-            viewport.minDepth = 0.0f;
-            viewport.maxDepth = 1.0f;
-            vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = (float)swap_chain_extent.width;
+        viewport.height = (float)swap_chain_extent.height;
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(command_buffer, 0, 1, &viewport);
 
-            VkRect2D scissor{};
-            scissor.offset = { 0, 0 };
-            scissor.extent = swap_chain_extent;
-            vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+        VkRect2D scissor{};
+        scissor.offset = { 0, 0 };
+        scissor.extent = swap_chain_extent;
+        vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-            VkBuffer vertex_buffers[] = { vertex_buffer };
-            VkDeviceSize offsets[] = { 0 };
-            vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, offsets);
+        VkBuffer vertex_buffers[] = { vertex_buffer };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, offsets);
 
-            vkCmdBindIndexBuffer(command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindIndexBuffer(command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT16);
 
-            vkCmdDrawIndexed(command_buffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+        vkCmdDrawIndexed(command_buffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
         vkCmdEndRenderPass(command_buffer);
 
         if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
@@ -976,6 +1023,21 @@ private:
         vkDeviceWaitIdle(logical_device);
     }
 
+    void update_uniform_buffer(uint32_t current_image) {
+        static auto start_time = std::chrono::high_resolution_clock::now();
+
+        auto current_time = std::chrono::high_resolution_clock::now();
+        float elapsed_time = std::chrono::duration<float, std::chrono::seconds::period>(current_time - start_time).count();
+
+        UniformBufferObject ubo{};
+        ubo.model = glm::rotate(glm::mat4(1.0f), elapsed_time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.proj = glm::perspective(glm::radians(45.0f), swap_chain_extent.width / (float)swap_chain_extent.height, 0.1f, 10.0f);
+        ubo.proj[1][1] *= -1;
+
+        memcpy(uniform_buffers_mapped[current_image], &ubo, sizeof(ubo));
+    }
+
     void draw_frame() {
         vkWaitForFences(logical_device, 1, &in_flight_fences[current_frame], VK_TRUE, UINT64_MAX);
 
@@ -988,6 +1050,8 @@ private:
         else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
             throw std::runtime_error("vk: failed to acquire swap chain image");
         }
+
+        update_uniform_buffer(current_frame);
 
         vkResetFences(logical_device, 1, &in_flight_fences[current_frame]);
 
@@ -1043,6 +1107,13 @@ private:
         vkDestroyPipeline(logical_device, graphics_pipeline, nullptr);
         vkDestroyPipelineLayout(logical_device, pipeline_layout, nullptr);
         vkDestroyRenderPass(logical_device, render_pass, nullptr);
+
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            vkDestroyBuffer(logical_device, uniformBuffers[i], nullptr);
+            vkFreeMemory(logical_device, uniformBuffersMemory[i], nullptr);
+        }
+
+        vkDestroyDescriptorSetLayout(logical_device, descriptor_set_layout, nullptr);
 
         vkDestroyBuffer(logical_device, index_buffer, nullptr);
         vkFreeMemory(logical_device, index_buffer_memory, nullptr);
