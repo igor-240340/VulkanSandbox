@@ -993,9 +993,9 @@ private:
             texture_image,
             texture_image_memory);
 
-        transition_image_layout(texture_image, 
-            VK_FORMAT_R8G8B8A8_SRGB, 
-            VK_IMAGE_LAYOUT_UNDEFINED, 
+        transition_image_layout(texture_image,
+            VK_FORMAT_R8G8B8A8_SRGB,
+            VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mip_levels);
         copy_buffer_to_image(staging_buffer, texture_image, static_cast<uint32_t>(tex_width), static_cast<uint32_t>(tex_height));
         // NOTE: Transitioned to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL while generating mipmaps.
@@ -1124,8 +1124,8 @@ private:
 
         VkSamplerCreateInfo sampler_info{};
         sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        sampler_info.magFilter = VK_FILTER_NEAREST;
-        sampler_info.minFilter = VK_FILTER_NEAREST;
+        sampler_info.magFilter = VK_FILTER_NEAREST /*VK_FILTER_LINEAR*/;
+        sampler_info.minFilter = VK_FILTER_NEAREST /*VK_FILTER_LINEAR*/;
         sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
@@ -1136,7 +1136,12 @@ private:
         sampler_info.unnormalizedCoordinates = VK_FALSE;
         sampler_info.compareEnable = VK_FALSE;
         sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
+        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
         //sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        sampler_info.minLod = 0.0f;
+        //sampler_info.maxLod = VK_LOD_CLAMP_NONE;
+        sampler_info.maxLod = static_cast<float>(mip_levels);
+        sampler_info.mipLodBias = 0.0f;
 
         if (vkCreateSampler(logical_device, &sampler_info, nullptr, &texture_sampler) != VK_SUCCESS) {
             throw std::runtime_error("vk: failed to create texture sampler");
