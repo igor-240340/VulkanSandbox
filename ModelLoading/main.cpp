@@ -135,6 +135,7 @@ private:
 
     VkInstance instance;
     VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+    VkSampleCountFlagBits msaa_samples = VK_SAMPLE_COUNT_1_BIT;
     VkDevice logical_device;
     VkQueue graphics_queue;
     VkSurfaceKHR surface;
@@ -151,6 +152,10 @@ private:
     std::vector<VkFramebuffer> swap_chain_framebuffers;
     VkCommandPool command_pool;
     std::vector<VkCommandBuffer> command_buffers;
+
+    VkImage color_image;
+    VkDeviceMemory color_image_memory;
+    VkImageView color_image_view;
 
     VkImage depth_image;
     VkDeviceMemory depth_image_memory;
@@ -211,6 +216,7 @@ private:
         create_depth_resources();
         create_framebuffers();
         create_command_pool();
+        create_color_resources();
         create_texture_image();
         create_texture_image_view();
         create_texture_sampler();
@@ -600,6 +606,7 @@ private:
 
         create_swap_chain();
         create_image_views();
+        create_color_resources();
         create_depth_resources();
         create_framebuffers();
     }
@@ -608,6 +615,10 @@ private:
         vkDestroyImageView(logical_device, depth_image_view, nullptr);
         vkDestroyImage(logical_device, depth_image, nullptr);
         vkFreeMemory(logical_device, depth_image_memory, nullptr);
+
+        vkDestroyImageView(logical_device, color_image_view, nullptr);
+        vkDestroyImage(logical_device, color_image, nullptr);
+        vkFreeMemory(logical_device, color_image_memory, nullptr);
 
         for (auto framebuffer : swap_chain_framebuffers) {
             vkDestroyFramebuffer(logical_device, framebuffer, nullptr);
@@ -929,10 +940,25 @@ private:
         }
     }
 
+    void create_color_resources() {
+        VkFormat color_format = swap_chain_image_format;
+
+        create_image(swap_chain_extent.width, swap_chain_extent.height, 1, msaa_samples, color_format,
+            VK_IMAGE_TILING_OPTIMAL,
+            VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            color_image, color_image_memory);
+        color_image_view = create_image_view(color_image, color_format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+    }
+
     void create_depth_resources() {
         VkFormat depth_format = find_depth_format();
 
-        create_image(swap_chain_extent.width, swap_chain_extent.height, 1, depth_format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_image, depth_image_memory);
+        create_image(swap_chain_extent.width, swap_chain_extent.height, 1, msaa_samples, depth_format,
+            VK_IMAGE_TILING_OPTIMAL,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            depth_image, depth_image_memory);
         depth_image_view = create_image_view(depth_image, depth_format, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
     }
 
@@ -986,6 +1012,7 @@ private:
         stbi_image_free(pixels);
 
         create_image(tex_width, tex_height, mip_levels,
+            VK_SAMPLE_COUNT_1_BIT,
             VK_FORMAT_R8G8B8A8_SRGB,
             VK_IMAGE_TILING_OPTIMAL,
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -1094,6 +1121,23 @@ private:
         end_single_time_commands(command_buffer);
     }
 
+    VkSampleCountFlagBits get_max_usable_sample_count() {
+        VkPhysicalDeviceProperties physical_device_properties;
+        vkGetPhysicalDeviceProperties(physical_device, &physical_device_properties);
+
+        VkSampleCountFlags counts =
+            physical_device_properties.limits.framebufferColorSampleCounts &
+            physical_device_properties.limits.framebufferDepthSampleCounts;
+        if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
+        if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
+        if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
+        if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
+        if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
+        if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
+
+        return VK_SAMPLE_COUNT_1_BIT;
+    }
+
     void create_texture_image_view() {
         texture_image_view = create_image_view(texture_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mip_levels);
     }
@@ -1148,7 +1192,7 @@ private:
         }
     }
 
-    void create_image(uint32_t width, uint32_t height, uint32_t mip_levels, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+    void create_image(uint32_t width, uint32_t height, uint32_t mip_levels, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
         VkImageCreateInfo image_info{};
         image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         image_info.imageType = VK_IMAGE_TYPE_2D;
@@ -1161,7 +1205,7 @@ private:
         image_info.tiling = tiling;
         image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         image_info.usage = usage;
-        image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+        image_info.samples = num_samples;
         image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
         if (vkCreateImage(logical_device, &image_info, nullptr, &image) != VK_SUCCESS) {
@@ -1374,6 +1418,7 @@ private:
         for (const auto& device : devices) {
             if (is_device_suitable(device)) {
                 physical_device = device;
+                msaa_samples = get_max_usable_sample_count();
                 break;
             }
         }
