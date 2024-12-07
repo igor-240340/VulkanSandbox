@@ -49,6 +49,26 @@ const bool enable_validation_layers = false;
 const bool enable_validation_layers = true;
 #endif
 
+VkResult create_debug_utils_messenger_ext(
+    VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* create_info,
+    const VkAllocationCallbacks* allocator, VkDebugUtilsMessengerEXT* debug_messenger) {
+    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+    if (func != nullptr) {
+        return func(instance, create_info, allocator, debug_messenger);
+    }
+    else {
+        return VK_ERROR_EXTENSION_NOT_PRESENT;
+    }
+}
+
+void DestroyDebugUtilsMessengerEXT(
+    VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    if (func != nullptr) {
+        func(instance, debugMessenger, pAllocator);
+    }
+}
+
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphics_family;
     std::optional<uint32_t> present_family;
@@ -134,6 +154,7 @@ private:
     GLFWwindow* window;
 
     VkInstance instance;
+    VkDebugUtilsMessengerEXT debug_messenger;
     VkPhysicalDevice physical_device = VK_NULL_HANDLE;
     VkSampleCountFlagBits msaa_samples = VK_SAMPLE_COUNT_1_BIT;
     VkDevice logical_device;
@@ -205,6 +226,7 @@ private:
 
     void init_vulkan() {
         create_instance();
+        setup_debug_messenger();
         create_surface();
         pick_physical_device();
         create_logical_device();
@@ -213,10 +235,10 @@ private:
         create_render_pass();
         create_descriptor_set_layout();
         create_graphics_pipeline();
-        create_depth_resources();
-        create_framebuffers();
         create_command_pool();
         create_color_resources();
+        create_depth_resources();
+        create_framebuffers();
         create_texture_image();
         create_texture_image_view();
         create_texture_sampler();
@@ -266,6 +288,17 @@ private:
 
         if (vkCreateInstance(&create_info, nullptr, &instance) != VK_SUCCESS) {
             throw std::runtime_error("vk: failed to create instance");
+        }
+    }
+
+    void setup_debug_messenger() {
+        if (!enable_validation_layers) return;
+
+        VkDebugUtilsMessengerCreateInfoEXT create_info;
+        populate_debug_messenger_create_info(create_info);
+
+        if (create_debug_utils_messenger_ext(instance, &create_info, nullptr, &debug_messenger) != VK_SUCCESS) {
+            throw std::runtime_error("vk: failed to set up debug messenger");
         }
     }
 
@@ -364,23 +397,33 @@ private:
     void create_render_pass() {
         VkAttachmentDescription color_attachment{};
         color_attachment.format = swap_chain_image_format;
-        color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        color_attachment.samples = msaa_samples;
         color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
         VkAttachmentDescription depth_attachment{};
         depth_attachment.format = find_depth_format();
-        depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        depth_attachment.samples = msaa_samples;
         depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         depth_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         depth_attachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+        VkAttachmentDescription color_attachment_resolve{};
+        color_attachment_resolve.format = swap_chain_image_format;
+        color_attachment_resolve.samples = VK_SAMPLE_COUNT_1_BIT;
+        color_attachment_resolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        color_attachment_resolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        color_attachment_resolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        color_attachment_resolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        color_attachment_resolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        color_attachment_resolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
         VkAttachmentReference color_attachment_ref{};
         color_attachment_ref.attachment = 0;
@@ -390,11 +433,16 @@ private:
         depth_attachment_ref.attachment = 1;
         depth_attachment_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
+        VkAttachmentReference color_attachment_resolve_ref{};
+        color_attachment_resolve_ref.attachment = 2;
+        color_attachment_resolve_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
         VkSubpassDescription subpass{};
         subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         subpass.colorAttachmentCount = 1;
         subpass.pColorAttachments = &color_attachment_ref;
         subpass.pDepthStencilAttachment = &depth_attachment_ref;
+        subpass.pResolveAttachments = &color_attachment_resolve_ref;
 
         VkSubpassDependency dependency{};
         dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -404,7 +452,9 @@ private:
         dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
         dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-        std::array<VkAttachmentDescription, 2> attachments = { color_attachment, depth_attachment };
+        std::array<VkAttachmentDescription, 3> attachments = {
+            color_attachment, depth_attachment, color_attachment_resolve
+        };
         VkRenderPassCreateInfo render_pass_info{};
         render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
         render_pass_info.attachmentCount = static_cast<uint32_t>(attachments.size());;
@@ -500,7 +550,7 @@ private:
         VkPipelineMultisampleStateCreateInfo multisampling{};
         multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         multisampling.sampleShadingEnable = VK_FALSE;
-        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        multisampling.rasterizationSamples = msaa_samples;
 
         VkPipelineDepthStencilStateCreateInfo depth_stencil{};
         depth_stencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -572,9 +622,10 @@ private:
         swap_chain_framebuffers.resize(swap_chain_image_views.size());
 
         for (size_t i = 0; i < swap_chain_image_views.size(); i++) {
-            std::array<VkImageView, 2> attachments = {
-                swap_chain_image_views[i],
-                depth_image_view
+            std::array<VkImageView, 3> attachments = {
+                color_image_view,
+                depth_image_view,
+                swap_chain_image_views[i]
             };
 
             VkFramebufferCreateInfo framebuffer_info{};
@@ -1088,8 +1139,8 @@ private:
                 image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 1, &blit,
-                //VK_FILTER_LINEAR);
-                VK_FILTER_NEAREST);
+                VK_FILTER_LINEAR);
+            //VK_FILTER_NEAREST);
 
             barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
             barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -1168,8 +1219,8 @@ private:
 
         VkSamplerCreateInfo sampler_info{};
         sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        sampler_info.magFilter = VK_FILTER_NEAREST /*VK_FILTER_LINEAR*/;
-        sampler_info.minFilter = VK_FILTER_NEAREST /*VK_FILTER_LINEAR*/;
+        sampler_info.magFilter = /*VK_FILTER_NEAREST*/ VK_FILTER_LINEAR;
+        sampler_info.minFilter = /*VK_FILTER_NEAREST*/ VK_FILTER_LINEAR;
         sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
@@ -1180,8 +1231,8 @@ private:
         sampler_info.unnormalizedCoordinates = VK_FALSE;
         sampler_info.compareEnable = VK_FALSE;
         sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
-        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-        //sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        //sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
         sampler_info.minLod = 0.0f;
         //sampler_info.maxLod = VK_LOD_CLAMP_NONE;
         sampler_info.maxLod = static_cast<float>(mip_levels);
@@ -1192,7 +1243,10 @@ private:
         }
     }
 
-    void create_image(uint32_t width, uint32_t height, uint32_t mip_levels, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+    void create_image(
+        uint32_t width, uint32_t height, uint32_t mip_levels, VkSampleCountFlagBits num_samples,
+        VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
+        VkImage& image, VkDeviceMemory& imageMemory) {
         VkImageCreateInfo image_info{};
         image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         image_info.imageType = VK_IMAGE_TYPE_2D;
@@ -1358,11 +1412,6 @@ private:
         create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         create_info.pfnUserCallback = debug_callback;
-    }
-
-    static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data) {
-        std::cerr << "vk: validation layer " << callback_data->pMessage << std::endl;
-        return VK_FALSE;
     }
 
     bool check_validation_layer_support() {
@@ -1699,6 +1748,11 @@ private:
 
         vkDestroyCommandPool(logical_device, command_pool, nullptr);
         vkDestroyDevice(logical_device, nullptr);
+
+        if (enable_validation_layers) {
+            DestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr);
+        }
+
         vkDestroySurfaceKHR(instance, surface, nullptr);
         vkDestroyInstance(instance, nullptr);
 
@@ -1722,6 +1776,14 @@ private:
         file.close();
 
         return buffer;
+    }
+
+    static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
+        VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type,
+        const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data) {
+        std::cerr << "validation layer: " << callback_data->pMessage << std::endl;
+
+        return VK_FALSE;
     }
 };
 
