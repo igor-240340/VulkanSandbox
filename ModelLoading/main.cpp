@@ -549,8 +549,10 @@ private:
 
         VkPipelineMultisampleStateCreateInfo multisampling{};
         multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        multisampling.sampleShadingEnable = VK_FALSE;
         multisampling.rasterizationSamples = msaa_samples;
+
+        multisampling.sampleShadingEnable = VK_FALSE;
+        multisampling.minSampleShading = 0.5f;
 
         VkPipelineDepthStencilStateCreateInfo depth_stencil{};
         depth_stencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -1572,7 +1574,8 @@ private:
         }
 
         VkPhysicalDeviceFeatures device_features{};
-        //device_features.samplerAnisotropy = VK_TRUE;
+        device_features.samplerAnisotropy = VK_TRUE;
+        device_features.sampleRateShading = VK_TRUE;
 
         VkDeviceCreateInfo create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
