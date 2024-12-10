@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Rectangle", "Rectangle\Rect
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ModelLoading", "ModelLoading\ModelLoading.vcxproj", "{DA60DF49-DD4D-4AFF-B43B-433AD0915714}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ComputeShader", "ComputeShader\ComputeShader.vcxproj", "{05CB22B4-4AC1-4037-B6A8-00F888DEA142}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -51,6 +53,14 @@ Global
 		{DA60DF49-DD4D-4AFF-B43B-433AD0915714}.Release|x64.Build.0 = Release|x64
 		{DA60DF49-DD4D-4AFF-B43B-433AD0915714}.Release|x86.ActiveCfg = Release|Win32
 		{DA60DF49-DD4D-4AFF-B43B-433AD0915714}.Release|x86.Build.0 = Release|Win32
+		{05CB22B4-4AC1-4037-B6A8-00F888DEA142}.Debug|x64.ActiveCfg = Debug|x64
+		{05CB22B4-4AC1-4037-B6A8-00F888DEA142}.Debug|x64.Build.0 = Debug|x64
+		{05CB22B4-4AC1-4037-B6A8-00F888DEA142}.Debug|x86.ActiveCfg = Debug|Win32
+		{05CB22B4-4AC1-4037-B6A8-00F888DEA142}.Debug|x86.Build.0 = Debug|Win32
+		{05CB22B4-4AC1-4037-B6A8-00F888DEA142}.Release|x64.ActiveCfg = Release|x64
+		{05CB22B4-4AC1-4037-B6A8-00F888DEA142}.Release|x64.Build.0 = Release|x64
+		{05CB22B4-4AC1-4037-B6A8-00F888DEA142}.Release|x86.ActiveCfg = Release|Win32
+		{05CB22B4-4AC1-4037-B6A8-00F888DEA142}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
