@@ -892,7 +892,7 @@ private:
             descriptor_writes[0].pBufferInfo = &uniform_buffer_info;
 
             VkDescriptorBufferInfo storage_buffer_info_last_frame{};
-            storage_buffer_info_last_frame.buffer = shader_storage_buffers[(i - 1) % max_frames_in_flight];
+            storage_buffer_info_last_frame.buffer = shader_storage_buffers[(i - 1) % max_frames_in_flight]; // 0->1, 1->0.
             storage_buffer_info_last_frame.offset = 0;
             storage_buffer_info_last_frame.range = sizeof(Particle) * particle_count;
 
