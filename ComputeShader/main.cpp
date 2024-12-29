@@ -1,3 +1,7 @@
+/*
+ * Based on Alexander Overvoorde's Vulkan tutorial.
+ */
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
