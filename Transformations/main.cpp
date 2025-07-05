@@ -1,5 +1,5 @@
 /*
- * Based on Alexander Overvoorde's Vulkan tutorial.
+ * Референсная сцена для сверки матриц трансформации, реализованных в рамках кастомного программного растеризатора.
  */
 
 #define GLFW_INCLUDE_VULKAN
@@ -96,21 +96,27 @@ struct Vertex {
     }
 };
 
+/*
 const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+    {{0.12858511992886f, 0.09014727201472f, -3.062135394734f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+    {{0.0f, 0.1f, -4.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{-0.0017940119725222f, -0.013699806553022f, -6.567130320242f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
 
-    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-    {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
+    {{0.05348720083878f, 0.1339907277809f, -3.684037874323f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+    {{-0.02750651338714f, -0.03447517605658f, -3.722437583851f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
+    {{ 0.08517046970116f, 0.00457807936321f, -5.049799420868f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}}
+};
+*/
+
+const std::vector<Vertex> vertices = {
+    {{-2.431883860752f, 1.756684629583f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+    {{-2.0f, -2.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
+    {{2.0f, 2.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}
 };
 
 const std::vector<uint16_t> indices = {
-    0, 1, 2, 2, 3, 0,
-    4, 5, 6, 6, 7, 4
+    0, 1, 2,
+    3, 4, 5
 };
 
 uint32_t current_frame = 0;
@@ -396,7 +402,7 @@ private:
         std::array<VkAttachmentDescription, 2> attachments = { color_attachment, depth_attachment };
         VkRenderPassCreateInfo render_pass_info{};
         render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        render_pass_info.attachmentCount = static_cast<uint32_t>(attachments.size());
+        render_pass_info.attachmentCount = static_cast<uint32_t>(attachments.size());;
         render_pass_info.pAttachments = attachments.data();
         render_pass_info.subpassCount = 1;
         render_pass_info.pSubpasses = &subpass;
@@ -569,7 +575,7 @@ private:
             VkFramebufferCreateInfo framebuffer_info{};
             framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             framebuffer_info.renderPass = render_pass;
-            framebuffer_info.attachmentCount = static_cast<uint32_t>(attachments.size());
+            framebuffer_info.attachmentCount = static_cast<uint32_t>(attachments.size());;
             framebuffer_info.pAttachments = attachments.data();
             framebuffer_info.width = swap_chain_extent.width;
             framebuffer_info.height = swap_chain_extent.height;
@@ -1399,8 +1405,15 @@ private:
         float elapsed_time = std::chrono::duration<float, std::chrono::seconds::period>(current_time - start_time).count();
 
         UniformBufferObject ubo{};
-        ubo.model = glm::rotate(glm::mat4(1.0f), elapsed_time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.model = glm::mat4(1.0f);
+        ubo.model = glm::translate(ubo.model, glm::vec3(0.0f, 0.0f, -9.0f));
+        ubo.model = glm::rotate(ubo.model, glm::radians(76.48913183105f), glm::vec3(0.0f, 1.0f, 0.0f));
+        ubo.model = glm::rotate(ubo.model, glm::radians(46.92909951096f), glm::vec3(1.0f, 0.0f, 0.0f));
+        ubo.model = glm::rotate(ubo.model, glm::radians(69.64592296022f), glm::vec3(0.0f, 0.0f, 1.0f));
+        //ubo.model = glm::translate(ubo.model, glm::vec3(0.0f, 0.0f, -9.0f));
+        //ubo.model = glm::rotate(glm::mat4(1.0f), glm::radians(69.64592296022f), glm::vec3(1.0f, 1.0f, 1.0f));
+        //ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.view = glm::mat4(1.0f);
         ubo.proj = glm::perspective(glm::radians(45.0f), swap_chain_extent.width / (float)swap_chain_extent.height, 0.1f, 10.0f);
         ubo.proj[1][1] *= -1;
 
